@@ -1,0 +1,642 @@
+---
+title: "colonCryptRespirometry"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{colonCryptRespirometry}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(SeahorseR)
+library(tidyverse)
+```
+
+## Data import
+
+1.  Export the data from WAVE to excel
+2.  Open the excel file and select the worksheet "Rate Data"
+3.  Select the data with CMD-A or Ctrl-A and copy to the clipboard (CMD-C, or Ctrl-C).
+4.  Open a new plain text file in a plain text editor (RStudio or notepad) or and paste the data (CMD-V or Ctrl-V)
+5.  Create a folder for rate_data and save the file with a name that specifies the experiment or batch (e.g. "2023-02-14")
+6.  Normalization data should be a matrix with 12 columns 8 rows (format of a 96-well plate) and in a tab-delimited file.
+7.  The bindRateData function will create a file with data from multiple runs. It can import normalized data too, but normalization can be added later, which I prefer.
+
+```{r}
+
+dt.raw <- bindRateData(data.dir = "rate_data",
+                       norm.meth = "none",
+                       out.name = "all_rate_data_raw.txt")
+```
+
+8.  remove background and any wells that need to be excluded
+
+```{r}
+dt.raw <- remove_wells(dt.raw,
+                       exclude = dt.raw$well[dt.raw$wave.id%in%c("Unassigned","Background")]
+                       )
+```
+
+9.  Clean it up a bit and add grouping and interval columns
+
+This is a good time to make sure the values in wave.id look ok.
+
+```{r}
+unique(dt.raw$wave.id)
+
+```
+
+The periods in wave.id help with the meta data variables.
+
+```{r}
+pheno<-as.data.frame(do.call(rbind,strsplit(dt.raw$wave.id,"\\.")))
+names(pheno)<-c("SampNum","mID","Tissue","GT","Age")
+dt.raw<-cbind(dt.raw, pheno)
+```
+
+create variable to group by tissue, batch and mouse ID.
+
+```{r}
+dt.raw$tissueID<-paste(dt.raw$batch,
+                       dt.raw$mID,
+                       dt.raw$Tissue,
+                       sep = "_")
+```
+
+make sure the numeric columns are numeric
+
+```{r}
+dt.raw$ocr <- as.numeric(gsub(",","",dt.raw$ocr))
+dt.raw$ecar <- as.numeric(gsub(",","",dt.raw$ecar))
+dt.raw$ppr <- as.numeric(gsub(",","",dt.raw$ppr))
+```
+
+add interval columns and columns to group by interval
+
+```{r}
+
+dt.raw$interval <- create_column_interval(dt.raw,
+                                          Interval.list=list(Int0=c(1),
+                                                             Int1=c(2:3),
+                                                             Int2=c(4:6),
+                                                             Int3=c(7:10),
+                                                             Int4=c(11:14)))
+dt.raw$treatment <- create_column_treatment(dt.raw,
+                                            Treatment.list=list(
+                                              Int1="basal",
+                                              Int2="oligomycin",
+                                              Int3="FCCP",
+                                              Int4="Rot+AA",
+                                              Int0="Start"
+                                            ))
+dt.raw$sample_id <- paste(dt.raw$tissueID, dt.raw$well, sep = "_")
+dt.raw$tis_int <- paste(dt.raw$tissueID, dt.raw$interval, sep = "_")
+dt.raw$samp_int <- paste(dt.raw$sample_id, dt.raw$interval, sep = "_")
+
+# consolidate ages
+dt.raw$AgeGrp<-ifelse(dt.raw$Age%in%c("10-11m","10-12m"),"10-12m","1-4m")
+
+# update abbreviations
+dt.raw$GT <- gsub("ASO","Thy1-haSyn",dt.raw$GT)
+
+# consider saving the processed raw data
+saveRDS(dt.raw,file = "dt.raw-processed.rds")
+
+```
+
+## QC
+
+### limit to wells with good response to inhibitors
+
+summarize by interval for each well
+
+```{r}
+dt.int <-
+  dt.raw %>% 
+  filter(interval!="Int0") %>% 
+  calcInt(varname = "ocr.samp.int",
+          groupingVar="samp_int",
+          intVar="interval",
+          intervals=c("Int1","Int2","Int3","Int4"),
+          measure="ocr",
+          calcFunctions=c("mean","min", "max", "min")) %>% 
+  ungroup() %>% 
+  select(sample_id,ocr.samp.int,tissueID,interval) %>% 
+  distinct() %>% 
+  pivot_wider(id_cols = c(sample_id, tissueID), 
+              names_from = interval, values_from = ocr.samp.int) 
+head(dt.int)
+```
+
+find wells with predicted response to inhibitors (stress-pass, sp)
+
+```{r}
+dt.int.sp <- dt.int %>% 
+  filter(Int3 > Int1,
+         Int1 > Int2,
+         Int2 > Int4) %>% 
+  distinct() %>% 
+  group_by(tissueID) %>% 
+  mutate(nWells=n()) %>% 
+  {.->> int.sp.all} %>% 
+  filter(nWells > 1) %>% 
+  ungroup() %>% 
+  arrange(sample_id)
+
+dt.sp <- dt.raw %>% 
+  filter(sample_id %in% dt.int.sp$sample_id)
+
+```
+
+```{r}
+
+wellsPerInt(dt.raw) 
+wellsPerInt(dt.sp) 
+
+
+```
+
+### add column with the normalization factor
+
+```{r}
+
+dt.spn<-add.norm(dt.sp, 
+                  norm.dat.dir = "norm-data-crypts",
+                  norm.meth = "crypts",
+                  batch.col = "batch")
+
+# only include those with normalization data
+dt.spn<-dt.spn[!is.na(dt.spn$crypts),]
+
+wellsPerInt(dt.spn)
+
+```
+
+### detection of raw data outliers
+
+summarize by interval
+
+```{r}
+
+int.spn<-dt.spn %>% 
+  group_by(batch,time) %>% 
+  mutate(ocr=ifelse(find_outlier(ocr,mult = 1.5),
+                    NA,
+                    ocr)) %>% 
+  ungroup() %>% 
+  {.->>dt.spno1} %>% 
+  filter(interval!="Int0") %>% 
+  calcInt(varname = "ocr",
+          groupingVar="samp_int",
+          intVar="interval",
+          intervals=c("Int1","Int2","Int3","Int4"),
+          measure="ocr",
+          calcFunctions=c("mean","min", "max", "min")) %>% 
+  select(sample_id,samp_int,interval,tissueID,
+                GT,AgeGrp,batch,well,mID,crypts,ocr) %>% 
+  distinct()%>% 
+  ungroup() %>% 
+  group_by(batch,interval) %>% 
+  mutate(outlier.norm=if_else(find_outlier(ocr/crypts,mult = 1.5),
+                              true = ocr/crypts,
+                              false=NA,
+                              missing=1),
+         outlier.raw=if_else(find_outlier(ocr,mult = 1.5),
+                             true = ocr,
+                             false=NA,
+                             missing=1)) %>%
+  ungroup() %>% 
+  distinct() %>% 
+  as.data.table()
+
+int.spn %>% filter(is.na(ocr))
+
+# excluded one sample with missing data for Int 3 after removed raw outlier wells
+raw.outs <- int.spn %>% 
+  filter(outlier.raw==1) %>% 
+  select(sample_id) %>% 
+  as.character()
+
+
+dt.spno1 <- dt.spno1 %>% 
+  filter(!sample_id%in%raw.outs) %>% 
+  as.data.table()
+int.spn <- int.spn %>% 
+  filter(!sample_id%in%raw.outs) %>% 
+  as.data.table()
+
+```
+
+wells with no raw outliers
+
+```{r}
+
+wellsPerInt(dt.spno1)
+```
+
+```{r,fig.cap="retained for sample size"}
+
+ggplot(int.spn,aes(interval,ocr))+
+  geom_boxplot()+
+  geom_text(aes(interval,outlier.raw,label=paste(well,mID,sep = "\n")), na.rm=TRUE,size=3,nudge_x = 0, nudge_y = 0,hjust=1)+
+  facet_wrap(~batch,nrow = 1)+
+  ggtitle("raw outliers")
+
+```
+
+```{r,fig.cap="outliers in normalized data, but not in raw data"}
+
+ggplot(int.spn,aes(interval,ocr/crypts))+
+  geom_boxplot()+
+  geom_text(aes(interval,outlier.norm,label=paste(well,mID,sep = "\n")), na.rm=TRUE,size=3,nudge_x = 0, nudge_y = 0,hjust=1)+
+  facet_wrap(~batch,nrow = 1)
+
+outliers1<-int.spn %>% 
+  filter(!is.na(outlier.norm)) %>% 
+  select(sample_id) %>% 
+  distinct()
+```
+
+
+impute by regression crypt count for these wells
+
+```{r}
+
+good.crypts<-int.spn %>% 
+  filter(!sample_id%in%outliers1$sample_id) %>% 
+  ungroup() %>% 
+  select(sample_id) %>% 
+  distinct()
+
+wells.imputed<-wellsPerInt(int.spn %>% 
+                             filter(!sample_id%in%(good.crypts$sample_id)))
+
+predict.crypts <- int.spn %>% 
+  filter(interval=="Int3") %>% 
+  mutate(crypts=ifelse(sample_id%in%outliers1$sample_id,NA,crypts)) %>% 
+  select(sample_id,tissueID,mID,batch,well,ocr,crypts)
+
+
+fit.crypts <- lm(crypts~ocr+batch, data = predict.crypts,)
+summary(fit.crypts)
+predict.crypts$crypts.pred<-predict(fit.crypts,predict.crypts)
+
+dt.spn2 <- dt.spno1 %>% 
+  left_join(.,predict.crypts[,c("sample_id","crypts.pred")],by="sample_id",) %>%   
+  mutate(crypts.im = if_else(sample_id%in%good.crypts$sample_id,
+                             true = crypts,
+                             false= crypts.pred,
+                             missing=crypts),
+         ocr.raw=ocr,
+         ecar.raw=ecar,
+         ocr=ocr/crypts.im,
+         ecar=ecar/crypts.im) 
+```
+
+
+
+
+recalculate and view outliers
+```{r}
+int.spn2<-dt.spn2 %>% 
+  group_by(samp_int) %>% 
+  filter(interval!="Int0") %>% 
+  calcInt(varname = "ocr",
+          groupingVar="samp_int",
+          intVar="interval",
+          intervals=c("Int1","Int2","Int3","Int4"),
+          measure="ocr",
+          calcFunctions=c("mean","min", "max", "min")) %>% 
+  select(sample_id,samp_int,interval,tissueID,
+                GT,AgeGrp,batch,well,mID,crypts,ocr) %>% 
+  distinct()%>% 
+  ungroup() %>% 
+  group_by(batch,interval) %>% 
+  mutate(outlier=ifelse(find_outlier(ocr,mult = 1.5),
+                        ocr,NA)) %>%
+  ungroup() %>% 
+  distinct() %>% 
+  as.data.table()
+
+wellsPerInt(int.spn2[is.na(outlier)])
+
+```
+
+```{r, fig.cap="outliers after imputing crypt counts"}
+
+ggplot(int.spn2,aes(interval,ocr))+
+  geom_boxplot()+
+  geom_text(aes(interval,outlier,label=paste(well,mID,sep = "\n")), na.rm=TRUE,size=3,nudge_x = 0, nudge_y = 0,hjust=1)+
+  facet_wrap(~batch,nrow = 1)
+
+```
+
+
+
+```{r}
+
+dt.norm<-dt.spn2 %>% 
+  group_by(batch,time) %>% 
+  mutate(ocr=ifelse(find_outlier(ocr,mult = 1.5),
+                    NA,ocr)) %>%
+  ungroup() %>% 
+  as.data.table()
+
+int.norm <- dt.spn2 %>% 
+  group_by(samp_int) %>% 
+  filter(interval!="Int0") %>% 
+  calcInt(varname = "ocr",
+          groupingVar="samp_int",
+          intVar="interval",
+          intervals=c("Int1","Int2","Int3","Int4"),
+          measure="ocr",
+          calcFunctions=c("mean","min", "max", "min")) %>% 
+  select(sample_id,samp_int,interval,ocr,tissueID,
+                GT,AgeGrp,batch,ocr,well,mID) %>% 
+  distinct()%>% 
+  ungroup() %>% 
+  group_by(batch,interval) %>% 
+  mutate(ocr=ifelse(find_outlier(ocr,mult = 1.5),
+                    NA,ocr)) %>%
+  ungroup() %>% 
+  distinct() %>% 
+  as.data.table()
+```
+
+
+
+## Calculation of respiratory states
+
+```{r}
+
+data.cols<-c("Basal", "Maximal",
+             "Spare","ATP_linked",
+             "Proton_leak","Non_Mito")
+
+dt.states <-
+  int.norm %>% 
+  filter(!is.na(ocr)) %>% 
+  filter(interval!="Int0") %>% 
+  select(interval,ocr,
+                GT,AgeGrp,sample_id,tissueID, mID,
+                batch) %>% 
+  mutate(Time.Interval=as.numeric(gsub("Int","",interval)),
+         GT.Age=paste(GT,AgeGrp,sep = "_")) %>% 
+  pivot_wider(id_cols = c(
+    GT,AgeGrp,sample_id,tissueID, mID,
+    batch), 
+    names_from = interval, values_from = ocr) %>% 
+  mutate(Maximal=Int3-Int4,
+         Spare = Int3 - Int1,
+         Basal = Int1 - Int4,
+         ATP_linked = Int1 - Int2,
+         Proton_leak = Int2 - Int4,
+         Non_Mito = Int4
+  ) %>%
+  select(-Int1, -Int2, -Int3, -Int4) %>%
+  mutate( across(all_of(data.cols),~ mean(.x, na.rm = TRUE)),.by = c(tissueID)) %>%
+  select(-sample_id) %>%
+  distinct() 
+
+# create in long form for plotting too
+dt.states.l <- 
+  dt.states %>% 
+  pivot_longer(cols=all_of(data.cols),
+               names_to = "Measure",
+               values_to = "Value") 
+
+
+
+```
+
+
+
+## Plots
+
+### Respiratory States
+
+```{r}
+
+ggplot(dt.states.l, aes(AgeGrp,Value,fill=GT))+
+  geom_boxplot(position = position_dodge(width = .75))+
+  geom_point(position = position_dodge(width = .75))+
+  facet_wrap(~Measure,nrow = 2)+
+  ylab('OCR (pmol/min)/crypt')+
+  xlab("Age")+
+  theme_bw()+
+  scale_fill_grey()+
+  theme(legend.title = element_blank(),
+        strip.background = element_rect(fill = "white"),
+        legend.position = "right",
+        legend.text = element_text(size=11),
+        strip.text = element_text(size=10),
+  )
+
+
+
+```
+
+
+### Time series
+
+```{r}
+
+dt.norm.means.ocr<-
+  dt.norm %>% 
+  mutate(tis.time=paste(tissueID,time,sep = "_")) %>% 
+  select(c(tis.time,tissueID,time,ocr,
+                  GT,AgeGrp)) %>% 
+  group_by(tis.time) %>% 
+  mutate(ocr=mean(ocr,na.rm=TRUE)) %>% 
+  distinct()
+
+datSum.ocr<-summarySEwithin(dt.norm.means.ocr, measurevar="ocr", 
+                            withinvars=c("time"), 
+                            idvar="tissueID", 
+                            betweenvars=c(
+                              "GT","AgeGrp"),
+                            na.rm=TRUE, conf.interval=.95)
+
+datSum.ocr$time<-as.numeric(as.character(datSum.ocr$time))
+
+dt.norm.means.ecar<-
+  dt.norm %>% 
+  mutate(tis.time=paste(tissueID,time,sep = "_")) %>% 
+  select(c(tis.time,tissueID,time,ecar,
+                  GT,AgeGrp)) %>% 
+  group_by(tis.time) %>% 
+  mutate(ecar=mean(ecar,na.rm=TRUE)) %>% 
+  distinct()
+
+datSum.ecar<-summarySEwithin(dt.norm.means.ecar, measurevar="ecar", 
+                             withinvars=c("time"), 
+                             idvar="tissueID", 
+                             betweenvars=c(
+                               "GT","AgeGrp"),
+                             na.rm=TRUE, conf.interval=.95)
+
+datSum.ecar$time<-as.numeric(as.character(datSum.ecar$time))
+
+```
+
+
+```{r}
+
+ggplot(datSum.ocr, aes(time, ocr, linetype = GT)) + 
+  geom_line() + 
+  geom_errorbar(aes(ymin=ocr-se, ymax=ocr+se), colour="black", width=.1, linetype=1) +
+  geom_point(size = 1) +
+  theme_bw() + xlab('Timepoint') +ylab('OCR (pmol/min)/crypt')+
+  scale_x_continuous(breaks = seq(min(datSum.ocr$time), max(datSum.ocr$time),by=1),minor_breaks = waiver())+
+  theme(legend.title = element_blank(),
+        legend.position = "bottom",
+        legend.spacing.y = unit(0,"pt"),
+        legend.margin = margin(0,0,0,0),
+        plot.margin = margin(5,5,0,5),
+        legend.text = element_text(size=12),
+        strip.text = element_text(size=11),
+        strip.background = element_rect(fill = "white"))+
+  facet_grid(~AgeGrp,scales = "free")
+
+```
+
+
+
+```{r}
+
+ggplot(datSum.ecar, aes(time, ecar, linetype = GT)) + 
+  geom_line() + 
+  geom_errorbar(aes(ymin=ecar-se, ymax=ecar+se), colour="black", width=.1, linetype=1) +
+  geom_point(size = 1) +
+  theme_bw() + xlab('Timepoint') +ylab('ECAR (mpH/min)/crypt')+
+  scale_x_continuous(breaks = seq(min(datSum.ecar$time), max(datSum.ecar$time),by=1),minor_breaks = waiver())+
+  theme(legend.title = element_blank(),
+        legend.position = "bottom",
+        legend.spacing.y = unit(0,"pt"),
+        legend.margin = margin(0,0,0,0),
+        plot.margin = margin(5,5,0,5),
+        legend.text = element_text(size=12),
+        strip.text = element_text(size=11),
+        strip.background = element_rect(fill = "white"))+
+  facet_grid(~AgeGrp,scales = "free")
+
+```
+
+
+
+## Statistical analysis
+
+
+### Respiratory states
+
+```{r}
+
+fit.list<-list()
+
+for(v in data.cols){
+  fit.list[[v]]<-list()
+  mod<-paste(v,"~ GT + AgeGrp + GT:AgeGrp")
+  fit.list[[v]][["all"]]<-lm(eval(parse(text=mod)),
+                             data=dt.states,
+                             na.action="na.exclude")
+  
+  mod<-paste(v,"~ GT")
+  fit.list[[v]][["young"]]<-lm(eval(parse(text=mod)),
+                               data=dt.states[dt.states$AgeGrp=="1-4m",],
+                               na.action="na.exclude")
+  
+  fit.list[[v]][["adult"]]<-lm(eval(parse(text=mod)),
+                               data=dt.states[dt.states$AgeGrp=="10-12m",],
+                               na.action="na.exclude")
+}
+
+sum.list<-lapply(fit.list, function(x) lapply(x,summary))
+
+modsig<-do.call(rbind,
+                do.call(rbind,
+                        lapply(
+                          fit.list, function(x) 
+                            lapply(x,broom::glance)
+                        )))
+
+modsig$age<-rep(names(fit.list$basal_resp),length(fit.list))
+
+Measure<-NULL
+for(i in 1:length(fit.list)){
+  Measure<-c(Measure,rep(names(fit.list)[i],3))
+}
+
+modsig$Measure<-Measure
+
+restab<-NULL
+for(v in names(fit.list)){
+  for(agegrp in names(fit.list[[v]])){
+    sumtab<-summary(fit.list[[v]][[agegrp]])$coefficients
+    df<-cbind(
+      Measure=rep(v,nrow(sumtab)),
+      age=rep(agegrp,nrow(sumtab)),
+      term=rownames(sumtab),
+      sumtab
+    )
+    restab<-rbind(restab,df)
+  }
+  
+}
+
+restab <- restab  %>%  
+    as.data.frame(row.names = F) %>% 
+    mutate_at(c(4:7), as.numeric)
+
+knitr::kable(restab, digits = 3)
+write.csv(restab,file = "regRes.csv")
+
+
+
+```
+
+
+
+### Time series
+
+```{r}
+
+gt=factor(dt.norm.means.ocr$GT)
+ocr=dt.norm.means.ocr$ocr
+age=factor(dt.norm.means.ocr$AgeGrp)
+t=dt.norm.means.ocr$time
+
+mod_gam1 = gam(ocr~s(t)+gt+age+gt*age)
+summary(mod_gam1)
+mod_gam2 = gam(ocr~s(t,by = gt)+gt+age+gt*age)
+summary(mod_gam2)
+anova(mod_gam1,mod_gam2,test="Chisq")
+
+
+```
+
+
+
+by age group
+```{r}
+
+for(age in unique(dt.norm.means.ocr$AgeGrp)){
+  cat("\n\n",age,"\n")
+  gt=factor(dt.norm.means.ocr$GT[dt.norm.means.ocr$AgeGrp==age])
+  ocr=dt.norm.means.ocr$ocr[dt.norm.means.ocr$AgeGrp==age]
+  t=dt.norm.means.ocr$time[dt.norm.means.ocr$AgeGrp==age]
+  mod_gam1 = gam(ocr~s(t)+gt)
+  mod_gam2 = gam(ocr~s(t,by = gt)+gt)
+  print(summary(mod_gam1))
+  print(summary(mod_gam2))
+  print(anova(mod_gam1,mod_gam2,test="Chisq"))
+}
+
+```
+
