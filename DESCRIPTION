@@ -1,0 +1,23 @@
+Package: SeahorseR
+Type: Package
+Title: R-based analysis of respirometry (Seahorse) data
+Version: 0.1.0
+Author: Beth Videlock
+Maintainer: Beth Videlock <videlock@ucla.edu>
+Description: Assists with import and analysis of data from Seahorse 
+    Extracellular Flux xf96.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Imports: 
+    mgcv,
+    dplyr,
+    plyr,
+    broom,
+    data.table,
+    readr
