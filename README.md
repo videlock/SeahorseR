@@ -10,4 +10,5 @@ If you find this package useful, please cite both Videlock et al and Viering et 
 
 
 
-[![DOI](https://zenodo.org/badge/680976848.svg)](https://zenodo.org/badge/latestdoi/680976848)
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8277505.svg)](https://doi.org/10.5281/zenodo.8277505)
