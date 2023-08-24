@@ -1,9 +1,26 @@
+#' bindRateData
+#'
+#' collects data exported from wave
+#'
+#' @param data.dir character-path of files
+#' @param norm.meth character
+#' @param out.name character
+#' @param returnData Boolean
+#' @importFrom data.table fread
+#' @importFrom readr write_delim
+
+#' @export
+
+
+
+
+
 bindRateData<-function(data.dir="rate_data", norm.meth="none", out.name="all_rate_data.txt", returnData=TRUE){
   file_list <- list.files(path = data.dir)
   all_rate_data <- data.frame()
   for (i in 1:length(file_list)){
     temp_data <- data.frame()
-    temp_data <- data.table::fread(file.path(data.dir,file_list[i]))
+    temp_data <- fread(file.path(data.dir,file_list[i]), data.table = F)
     colnames(temp_data) <- c("time", "well", "wave.id",
                              "time_exact", "ocr", "ecar", "ppr")
     if(nchar(file_list[i])==10){
@@ -19,7 +36,7 @@ bindRateData<-function(data.dir="rate_data", norm.meth="none", out.name="all_rat
   }
 
 
-  readr::write_delim(all_rate_data, file = out.name, delim = "\t")
+  write_delim(all_rate_data, file = out.name, delim = "\t")
 
   if(returnData){
     return(all_rate_data)

@@ -1,3 +1,16 @@
+
+#' summarySE
+#'
+#' stats for time repeated measures
+#' @param data data frame
+#' @param measurevar character
+#' @param groupvars character
+#' @param data a data frame.
+#' @param na.rm a boolean that indicates whether to ignore NA's
+#' @param conf.interval the percent range of the confidence interval (default is 95%)
+#' @param .drop Boolean
+#' @author http://www.cookbook-r.com/
+#' @importFrom plyr ddply
 summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
                       conf.interval=.95, .drop=TRUE) {
   # library(plyr)
@@ -10,7 +23,7 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 
   # This does the summary. For each group's data frame, return a vector with
   # N, mean, and sd
-  datac <- plyr::ddply(data, groupvars, .drop=.drop,
+  datac <- ddply(data, groupvars, .drop=.drop,
                  .fun = function(xx, col) {
                    c(N    = length2(xx[[col]], na.rm=na.rm),
                      mean = mean   (xx[[col]], na.rm=na.rm),
@@ -34,12 +47,22 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
   return(datac)
 }
 
+
+#' normDataWithin
+#' @importFrom plyr ddply
+#' @param na.rm a boolean that indicates whether to ignore NA's
+#' @param data a data frame.
+#' @param measurevar the name of a column that contains the variable to be summarized
+#' @param betweenvars a vector containing names of columns that are between-subjects variables
+#' @param idvar the name of a column that identifies each subject (or matched subjects)
+#' @param .drop Boolean
+#' @author http://www.cookbook-r.com/
 normDataWithin <- function(data=NULL, idvar, measurevar, betweenvars=NULL,
                            na.rm=FALSE, .drop=TRUE) {
   # library(plyr)
 
   # Measure var on left, idvar + between vars on right of formula.
-  data.subjMean <- plyr::ddply(data, c(idvar, betweenvars), .drop=.drop,
+  data.subjMean <- ddply(data, c(idvar, betweenvars), .drop=.drop,
                          .fun = function(xx, col, na.rm) {
                            c(subjMean = mean(xx[,col], na.rm=na.rm))
                          },
@@ -62,18 +85,23 @@ normDataWithin <- function(data=NULL, idvar, measurevar, betweenvars=NULL,
 }
 
 
-## Summarizes data, handling within-subjects variables by removing inter-subject variability.
-## It will still work if there are no within-S variables.
-## Gives count, un-normed mean, normed mean (with same between-group mean),
-##   standard deviation, standard error of the mean, and confidence interval.
-## If there are within-subject variables, calculate adjusted values using method from Morey (2008).
-##   data: a data frame.
-##   measurevar: the name of a column that contains the variable to be summariezed
-##   betweenvars: a vector containing names of columns that are between-subjects variables
-##   withinvars: a vector containing names of columns that are within-subjects variables
-##   idvar: the name of a column that identifies each subject (or matched subjects)
-##   na.rm: a boolean that indicates whether to ignore NA's
-##   conf.interval: the percent range of the confidence interval (default is 95%)
+
+
+#' summarySEwithin
+#'
+#' Summarizes data, handling within-subjects variables by removing inter-subject variability. It will still work if there are no within-S variables. Gives count, un-normed mean, normed mean (with same between-group mean), standard deviation, standard error of the mean, and confidence interval. If there are within-subject variables, calculate adjusted values using method from Morey (2008).
+#'
+#' @param data a data frame.
+#' @param measurevar the name of a column that contains the variable to be summarized
+#' @param betweenvars a vector containing names of columns that are between-subjects variables
+#' @param withinvars a vector containing names of columns that are within-subjects variables
+#' @param idvar the name of a column that identifies each subject (or matched subjects)
+#' @param na.rm a boolean that indicates whether to ignore NA's
+#' @param conf.interval the percent range of the confidence interval (default is 95%)
+#' @param .drop Boolean
+#' @author http://www.cookbook-r.com/
+#' @importFrom plyr ddply
+#' @export
 summarySEwithin <- function(data=NULL, measurevar, betweenvars=NULL, withinvars=NULL,
                             idvar=NULL, na.rm=FALSE, conf.interval=.95, .drop=TRUE) {
 

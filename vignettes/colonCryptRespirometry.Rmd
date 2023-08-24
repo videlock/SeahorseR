@@ -15,8 +15,8 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-library(SeahorseR)
 library(tidyverse)
+library(SeahorseR)
 ```
 
 ## Data import
@@ -130,7 +130,7 @@ dt.int <-
   ungroup() %>% 
   select(sample_id,ocr.samp.int,tissueID,interval) %>% 
   distinct() %>% 
-  pivot_wider(id_cols = c(sample_id, tissueID), 
+  tidyr::pivot_wider(id_cols = c(sample_id, tissueID), 
               names_from = interval, values_from = ocr.samp.int) 
 head(dt.int)
 ```
@@ -213,8 +213,8 @@ int.spn<-dt.spn %>%
                              false=NA,
                              missing=1)) %>%
   ungroup() %>% 
-  distinct() %>% 
-  as.data.table()
+  distinct()
+
 
 int.spn %>% filter(is.na(ocr))
 
@@ -226,11 +226,11 @@ raw.outs <- int.spn %>%
 
 
 dt.spno1 <- dt.spno1 %>% 
-  filter(!sample_id%in%raw.outs) %>% 
-  as.data.table()
+  filter(!sample_id%in%raw.outs) 
+
 int.spn <- int.spn %>% 
-  filter(!sample_id%in%raw.outs) %>% 
-  as.data.table()
+  filter(!sample_id%in%raw.outs)
+
 
 ```
 
@@ -322,10 +322,9 @@ int.spn2<-dt.spn2 %>%
   mutate(outlier=ifelse(find_outlier(ocr,mult = 1.5),
                         ocr,NA)) %>%
   ungroup() %>% 
-  distinct() %>% 
-  as.data.table()
+  distinct() 
 
-wellsPerInt(int.spn2[is.na(outlier)])
+wellsPerInt(int.spn2[is.na(int.spn2$outlier),])
 
 ```
 
@@ -334,7 +333,8 @@ wellsPerInt(int.spn2[is.na(outlier)])
 ggplot(int.spn2,aes(interval,ocr))+
   geom_boxplot()+
   geom_text(aes(interval,outlier,label=paste(well,mID,sep = "\n")), na.rm=TRUE,size=3,nudge_x = 0, nudge_y = 0,hjust=1)+
-  facet_wrap(~batch,nrow = 1)
+  facet_wrap(~batch,nrow = 1)+
+  ggtitle("Outliers for removal")
 
 ```
 
@@ -346,8 +346,8 @@ dt.norm<-dt.spn2 %>%
   group_by(batch,time) %>% 
   mutate(ocr=ifelse(find_outlier(ocr,mult = 1.5),
                     NA,ocr)) %>%
-  ungroup() %>% 
-  as.data.table()
+  ungroup() 
+
 
 int.norm <- dt.spn2 %>% 
   group_by(samp_int) %>% 
@@ -366,8 +366,8 @@ int.norm <- dt.spn2 %>%
   mutate(ocr=ifelse(find_outlier(ocr,mult = 1.5),
                     NA,ocr)) %>%
   ungroup() %>% 
-  distinct() %>% 
-  as.data.table()
+  distinct() 
+
 ```
 
 
@@ -422,7 +422,7 @@ dt.states.l <-
 
 ### Respiratory States
 
-```{r}
+```{r fig.height=5, fig.width=7}
 
 ggplot(dt.states.l, aes(AgeGrp,Value,fill=GT))+
   geom_boxplot(position = position_dodge(width = .75))+
@@ -595,7 +595,7 @@ restab <- restab  %>%
     mutate_at(c(4:7), as.numeric)
 
 knitr::kable(restab, digits = 3)
-write.csv(restab,file = "regRes.csv")
+# write.csv(restab,file = "regRes.csv")
 
 
 
@@ -612,9 +612,9 @@ ocr=dt.norm.means.ocr$ocr
 age=factor(dt.norm.means.ocr$AgeGrp)
 t=dt.norm.means.ocr$time
 
-mod_gam1 = gam(ocr~s(t)+gt+age+gt*age)
+mod_gam1 = mgcv::gam(ocr~s(t)+gt+age+gt*age)
 summary(mod_gam1)
-mod_gam2 = gam(ocr~s(t,by = gt)+gt+age+gt*age)
+mod_gam2 = mgcv::gam(ocr~s(t,by = gt)+gt+age+gt*age)
 summary(mod_gam2)
 anova(mod_gam1,mod_gam2,test="Chisq")
 
@@ -631,8 +631,8 @@ for(age in unique(dt.norm.means.ocr$AgeGrp)){
   gt=factor(dt.norm.means.ocr$GT[dt.norm.means.ocr$AgeGrp==age])
   ocr=dt.norm.means.ocr$ocr[dt.norm.means.ocr$AgeGrp==age]
   t=dt.norm.means.ocr$time[dt.norm.means.ocr$AgeGrp==age]
-  mod_gam1 = gam(ocr~s(t)+gt)
-  mod_gam2 = gam(ocr~s(t,by = gt)+gt)
+  mod_gam1 = mgcv::gam(ocr~s(t)+gt)
+  mod_gam2 = mgcv::gam(ocr~s(t,by = gt)+gt)
   print(summary(mod_gam1))
   print(summary(mod_gam2))
   print(anova(mod_gam1,mod_gam2,test="Chisq"))

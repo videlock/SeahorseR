@@ -1,2 +1,5 @@
 *.html
 *.R
+all_rate_data_raw.txt
+dt.raw-processed.rds
+regRes.csv

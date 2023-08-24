@@ -1,3 +1,12 @@
+#' read96wells
+#'
+#' reads an array in 96-well plate format
+#'
+#' @param mat matrix with 8 rows and 12 columns
+#' @export
+
+
+
 
 read96wells<-function(mat){
 

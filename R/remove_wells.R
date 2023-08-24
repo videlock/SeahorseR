@@ -1,3 +1,15 @@
+#' remove_wells
+#'
+#' removes background and user-specified.
+#'
+#' @param dt dataframe
+#' @param method character
+#' @param background character vector
+#' @param exclude character vector
+#' @param nMeasures integer - how many timepoints
+#' @export
+
+
 remove_wells <- function(dt, method = "without transformation",
                          background = c("A01", "H01", "A12", "H12"), exclude=NULL, nMeasures=14) {
   a <- nrow(dt)

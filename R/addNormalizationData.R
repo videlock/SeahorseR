@@ -1,3 +1,16 @@
+#' add normalization data
+#'
+#' adds a column with normalization factors.
+#'
+#' @param raw.dat dataframe
+#' @param norm.dat.dir character-path of files
+#' @param norm.meth character
+#' @param batch.col character, matches file names
+#' @export
+
+
+
+
 add.norm<-function(raw.dat,norm.dat.dir,norm.meth,batch.col){
   raw.dat <- as.data.frame(raw.dat)
   raw.dat[,batch.col] <- as.factor(raw.dat[,batch.col])

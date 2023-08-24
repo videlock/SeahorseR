@@ -1,4 +1,15 @@
-create_column_treatment <- function(dt,
+#' create_column_treatment
+#'
+#' Adds column with inhibitors
+#'
+#' @param df data frame
+#' @param Treatment.list list with names equal to intervals
+#' @param IntVar character-column name for intervals
+#' @export
+
+
+
+create_column_treatment <- function(df,
                                     Treatment.list=list(
                                       Int1="basal",
                                       Int2="oligomycin",
@@ -8,10 +19,10 @@ create_column_treatment <- function(dt,
                                     ),
                                     IntVar="interval"
                                     ) {
-  dt<-as.data.frame(dt)
+  df<-as.data.frame(df)
 
 
-   y <- dt[,IntVar]
+   y <- df[,IntVar]
   x <- character(length = length(y))
 
 
