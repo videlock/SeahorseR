@@ -1,5 +1,5 @@
 ---
-title: "colonCryptRespirometry"
+title: "Colon Crypt Respirometry"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{colonCryptRespirometry}
@@ -10,7 +10,9 @@ vignette: >
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
 )
 ```
 
