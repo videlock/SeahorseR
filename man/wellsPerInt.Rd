@@ -17,17 +17,17 @@ wellsPerInt(
 \arguments{
 \item{dat}{data frame}
 
-\item{measure}{character, what data column should be not na}
+\item{measure}{character, what data column should be not na, defaults to "ocr"}
 
-\item{wellVar}{character, column name for well}
+\item{wellVar}{character, column name for well, defaults to "well"}
 
-\item{groupingVars}{character vector of variables to group by}
+\item{groupingVars}{character vector of variables to group by, defaults to c("AgeGrp","interval","mID")}
 
-\item{tableVars}{character vector of variables to show results by}
+\item{tableVars}{character vector of variables to show results by, defaults to c("AgeGrp","GT")}
 
-\item{summaryColName}{name for the result column}
+\item{summaryColName}{name for the result column, defaults to "nWells"}
 
-\item{intVar}{character, name of column with intervals}
+\item{intVar}{character, name of column with intervals, defaults to "interval}
 }
 \description{
 table of well counts per sample for each interval

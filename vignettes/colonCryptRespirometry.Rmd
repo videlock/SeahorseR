@@ -1,8 +1,10 @@
 ---
 title: "Colon Crypt Respirometry"
-output: rmarkdown::html_vignette
+output: 
+  html_vignette:
+    df_print: "kable"
 vignette: >
-  %\VignetteIndexEntry{colonCryptRespirometry}
+  %\VignetteIndexEntry{Colon Crypt Respirometry}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -12,13 +14,14 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
-  fig.height = 5
+  fig.height = 5,
+  rmarkdown.df_print = TRUE
 )
 ```
 
 ```{r setup}
-library(tidyverse)
 library(SeahorseR)
+library(tidyverse)
 ```
 
 ## Data import
@@ -157,11 +160,29 @@ dt.sp <- dt.raw %>%
 
 ```
 
+
+Wells per sample per interval in raw data
+```{r, df_print="paged"}
+wellsPerInt(dt.raw,
+            measure = "ocr",wellVar = "well",
+            groupingVars = c("AgeGrp","interval","mID"),
+            tableVars = c("AgeGrp","GT"),
+            summaryColName = "nWells",
+            intVar = "interval")
+
+```
+
+
+Wells per sample per interval after stress-pass filter 
+
 ```{r}
 
-wellsPerInt(dt.raw) 
-wellsPerInt(dt.sp) 
-
+wellsPerInt(dt.sp,
+            measure = "ocr",wellVar = "well",
+            groupingVars = c("AgeGrp","interval","mID"),
+            tableVars = c("AgeGrp","GT"),
+            summaryColName = "nWells",
+            intVar = "interval")
 
 ```
 
@@ -226,12 +247,8 @@ raw.outs <- int.spn %>%
   select(sample_id) %>% 
   as.character()
 
-
-dt.spno1 <- dt.spno1 %>% 
-  filter(!sample_id%in%raw.outs) 
-
-int.spn <- int.spn %>% 
-  filter(!sample_id%in%raw.outs)
+int.spn <- int.spn[!int.spn$sample_id%in%int.spn$sample_id[int.spn$outlier.raw==1],]
+dt.spno1 <- dt.spno1[!dt.spno1$sample_id%in%int.spn$sample_id[int.spn$outlier.raw==1],]
 
 
 ```
@@ -239,7 +256,6 @@ int.spn <- int.spn %>%
 wells with no raw outliers
 
 ```{r}
-
 wellsPerInt(dt.spno1)
 ```
 

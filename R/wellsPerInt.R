@@ -4,12 +4,12 @@
 #' @import dplyr
 #' @importFrom tidyr pivot_wider
 #' @param dat data frame
-#' @param measure character, what data column should be not na
-#' @param wellVar character, column name for well
-#' @param groupingVars character vector of variables to group by
-#' @param tableVars character vector of variables to show results by
-#' @param summaryColName name for the result column
-#' @param intVar character, name of column with intervals
+#' @param measure character, what data column should be not na, defaults to "ocr"
+#' @param wellVar character, column name for well, defaults to "well"
+#' @param groupingVars character vector of variables to group by, defaults to c("AgeGrp","interval","mID")
+#' @param tableVars character vector of variables to show results by, defaults to c("AgeGrp","GT")
+#' @param summaryColName name for the result column, defaults to "nWells"
+#' @param intVar character, name of column with intervals, defaults to "interval
 #' @importFrom rlang :=
 #' @export
 
@@ -32,6 +32,7 @@ wellsPerInt<-function(dat, measure="ocr",
     pivot_wider(.,names_from = intVar,values_from = summaryColName) %>%
     group_by_at(tableVars) %>%
     arrange_at(tableVars)
+  return(dat2)
 
 }
 

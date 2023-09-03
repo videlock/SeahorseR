@@ -6,6 +6,7 @@
 #' @param norm.meth character
 #' @param out.name character
 #' @param returnData Boolean
+#' @param batchSelection character vector of file names to include
 #' @importFrom data.table fread
 #' @importFrom readr write_delim
 
@@ -15,8 +16,14 @@
 
 
 
-bindRateData<-function(data.dir="rate_data", norm.meth="none", out.name="all_rate_data.txt", returnData=TRUE){
+bindRateData<-function(data.dir="rate_data",
+                       batchSelection=NULL,
+                       norm.meth="none", out.name="all_rate_data.txt", returnData=TRUE){
   file_list <- list.files(path = data.dir)
+  if(!is.null(batchSelection)){
+    keep=file_list%in%batchSelection
+    file_list <- file_list[keep]
+  }
   all_rate_data <- data.frame()
   for (i in 1:length(file_list)){
     temp_data <- data.frame()

@@ -6,6 +6,7 @@
 \usage{
 bindRateData(
   data.dir = "rate_data",
+  batchSelection = NULL,
   norm.meth = "none",
   out.name = "all_rate_data.txt",
   returnData = TRUE
@@ -13,6 +14,8 @@ bindRateData(
 }
 \arguments{
 \item{data.dir}{character-path of files}
+
+\item{batchSelection}{character vector of file names to include}
 
 \item{norm.meth}{character}
 

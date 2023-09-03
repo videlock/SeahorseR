@@ -4,16 +4,18 @@
 \alias{add.norm}
 \title{add normalization data}
 \usage{
-add.norm(raw.dat, norm.dat.dir, norm.meth, batch.col)
+add.norm(raw.dat, norm.dat.dir, norm.meth, batch.col, na = "NA")
 }
 \arguments{
 \item{raw.dat}{dataframe}
 
-\item{norm.dat.dir}{character-path of files}
+\item{norm.dat.dir}{character-path of files. files are plain text with 8 rows and 12 columns}
 
 \item{norm.meth}{character}
 
 \item{batch.col}{character, matches file names}
+
+\item{na}{what are NA symbols, defaults to "NA"}
 }
 \description{
 adds a column with normalization factors.
