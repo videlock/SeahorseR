@@ -25,7 +25,7 @@ for(normdat in normfiles){
     if(!is.na(y)&rdat$wave.id[i]!="Background"){
       rdat[i,norm.meth]<-y
     }else{rdat[i,norm.meth]<-NA}
-  }
+    
   dat_norm<-rbind(dat_norm,rdat)
 }
 return(dat_norm)
